@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FINGER COUNT DETECTOR</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/dist/tabler-icons.min.css"
+    />
+    <style>
+      :root {
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+          Helvetica, Arial, sans-serif;
+        --color-background-primary: #ffffff;
+        --color-background-secondary: #f4f5f6;
+        --color-text-primary: #1a1d1f;
+        --color-text-secondary: #6f767e;
+        --color-text-tertiary: #b0b5ba;
+        --color-border-tertiary: #e6e8eb;
+        --color-border-secondary: #d6d9dc;
+        --border-radius-md: 8px;
+        --border-radius-lg: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        background: var(--color-background-secondary);
+        font-family: var(--font-sans);
+        color: var(--color-text-primary);
+      }
+
+      .page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 1.5rem 1.5rem 3rem;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+
+      .dash {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      /* ===== Top bar ===== */
+      .top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 0.5px solid var(--color-border-tertiary);
+      }
+      .top-bar .titles {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .top-bar .titles h1 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        line-height: 1.3;
+      }
+      .top-bar .sub {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+      }
+
+      .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 5px 12px;
+        border-radius: var(--border-radius-md);
+        border: 0.5px solid var(--color-border-tertiary);
+        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .status-badge.active {
+        background: #eaf3de;
+        color: #3b6d11;
+        border-color: #c0dd97;
+      }
+      .status-badge.error {
+        background: #fcebeb;
+        color: #a32d2d;
+        border-color: #f7c1c1;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        flex-shrink: 0;
+      }
+
+      /* ===== Main grid ===== */
+      .main-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+        gap: 1rem;
+        align-items: start;
+      }
+      @media (max-width: 800px) {
+        .main-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .video-card {
+        background: var(--color-background-primary);
+        border: 0.5px solid var(--color-border-tertiary);
+        border-radius: var(--border-radius-lg);
+        overflow: hidden;
+        position: relative;
+      }
+      .video-card video {
+        width: 100%;
+        display: block;
+        aspect-ratio: 4/3;
+        object-fit: cover;
+        transform: scaleX(-1);
+      }
+      .video-card canvas.overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .no-cam {
+        aspect-ratio: 4/3;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        color: var(--color-text-secondary);
+        font-size: 14px;
+        text-align: center;
+      }
+      .no-cam i {
+        font-size: 36px;
+        color: var(--color-text-tertiary);
+      }
+      .no-cam button {
+        margin-top: 6px;
+        padding: 7px 18px;
+        font-size: 13px;
+        font-family: inherit;
+        border-radius: var(--border-radius-md);
+        border: 0.5px solid var(--color-border-secondary);
+        background: var(--color-background-secondary);
+        cursor: pointer;
+        color: var(--color-text-primary);
+      }
+      .no-cam button:hover {
+        background: var(--color-border-tertiary);
+      }
+
+      /* ===== Side column ===== */
+      .side-col {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        height: 100%;
+      }
+
+      .count-card {
+        background: var(--color-background-primary);
+        border: 0.5px solid var(--color-border-tertiary);
+        border-radius: var(--border-radius-lg);
+        padding: 1.25rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+      }
+      .count-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .count-num {
+        font-size: 72px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--color-text-primary);
+        transition:
+          transform 0.15s ease,
+          color 0.15s ease;
+        font-variant-numeric: tabular-nums;
+      }
+      .count-num.pop {
+        transform: scale(1.15);
+        color: #0f6e56;
+      }
+      .finger-name {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        height: 18px;
+        line-height: 18px;
+      }
+
+      .hand-count-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .hand-mini {
+        background: var(--color-background-secondary);
+        border-radius: var(--border-radius-md);
+        padding: 10px 12px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      .hand-mini .hm-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        justify-content: center;
+      }
+      .hand-mini .hm-num {
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .finger-bars {
+        background: var(--color-background-primary);
+        border: 0.5px solid var(--color-border-tertiary);
+        border-radius: var(--border-radius-lg);
+        padding: 1rem 1.25rem;
+        flex: 1;
+      }
+      .fb-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        margin-bottom: 12px;
+      }
+      .fb-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .fb-row:last-child {
+        margin-bottom: 0;
+      }
+      .fb-name {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        width: 48px;
+        flex-shrink: 0;
+      }
+      .fb-track {
+        flex: 1;
+        height: 8px;
+        background: var(--color-background-secondary);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .fb-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: var(--color-border-tertiary);
+        transition:
+          width 0.2s ease,
+          background 0.15s ease;
+        width: 0%;
+      }
+      .fb-fill.on {
+        background: #1d9e75;
+        width: 100%;
+      }
+      .fb-fill.off {
+        background: var(--color-border-tertiary);
+        width: 0%;
+      }
+      .fb-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: var(--color-border-tertiary);
+        transition: background 0.15s ease;
+      }
+      .fb-dot.on {
+        background: #1d9e75;
+      }
+
+      /* ===== Stats row ===== */
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .stat-card {
+        background: var(--color-background-primary);
+        border: 0.5px solid var(--color-border-tertiary);
+        border-radius: var(--border-radius-md);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stat-card .s-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+      }
+      .stat-card .s-val {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ===== Controls ===== */
+      .ctrl-row {
+        display: flex;
+        gap: 8px;
+      }
+      .ctrl-row button {
+        flex: 1;
+        padding: 10px 0;
+        font-size: 13px;
+        font-weight: 500;
+        font-family: inherit;
+        border-radius: var(--border-radius-md);
+        cursor: pointer;
+        border: 0.5px solid var(--color-border-secondary);
+        background: var(--color-background-primary);
+        color: var(--color-text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: background 0.15s ease;
+      }
+      .ctrl-row button:hover {
+        background: var(--color-background-secondary);
+      }
+      .ctrl-row button.primary {
+        background: #1d9e75;
+        color: #fff;
+        border-color: #1d9e75;
+      }
+      .ctrl-row button.primary:hover {
+        background: #0f6e56;
+      }
+
+      /* ===== History strip ===== */
+      .history-strip {
+        background: var(--color-background-primary);
+        border: 0.5px solid var(--color-border-tertiary);
+        border-radius: var(--border-radius-lg);
+        padding: 1rem 1.25rem;
+      }
+      .hs-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        margin-bottom: 12px;
+      }
+      .hs-bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        height: 48px;
+      }
+      .hs-bar-wrap {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        height: 100%;
+      }
+      .hs-bar {
+        width: 100%;
+        max-width: 22px;
+        border-radius: 3px 3px 0 0;
+        background: #9fe1cb;
+        transition:
+          height 0.2s ease,
+          background 0.15s ease;
+        min-height: 3px;
+      }
+      .hs-num {
+        font-size: 10px;
+        color: var(--color-text-secondary);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      /* ===== Loading overlay ===== */
+      .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: var(--color-background-primary);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        z-index: 10;
+      }
+      .spinner {
+        width: 32px;
+        height: 32px;
+        border: 2.5px solid var(--color-border-tertiary);
+        border-top-color: #1d9e75;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .load-text {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .spinner {
+          animation: none;
+        }
+        .count-num.pop {
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="sr-only">
+      Finger detection dashboard — real-time camera-based hand and finger
+      counter
+    </h1>
+
+    <div class="page">
+      <div class="dash">
+        <div class="top-bar">
+          <div class="titles">
+            <h1>FINGER COUNT DETECTOR</h1>
+            <div class="sub">Real-time hand landmark recognition</div>
+          </div>
+          <div class="status-badge" id="statusBadge">
+            <div class="dot"></div>
+            <span id="statusText">Initialising…</span>
+          </div>
+        </div>
+
+        <div class="main-grid">
+          <div class="video-card" id="videoCard">
+            <div class="loading-overlay" id="loadingOverlay">
+              <div class="spinner"></div>
+              <div class="load-text" id="loadText">Loading hand model…</div>
+            </div>
+            <div class="no-cam" id="noCam" style="display: none">
+              <i class="ti ti-camera-off" aria-hidden="true"></i>
+              <span>Camera access needed</span>
+              <button onclick="startCamera()">Allow camera</button>
+            </div>
+            <video id="videoEl" autoplay playsinline muted></video>
+            <canvas id="overlayCanvas" class="overlay"></canvas>
+          </div>
+
+          <div class="side-col">
+            <div class="count-card">
+              <div class="count-label">Total fingers</div>
+              <div class="count-num" id="countNum">0</div>
+              <div class="finger-name" id="fingerWord">—</div>
+            </div>
+
+            <div class="hand-count-row">
+              <div class="hand-mini">
+                <div class="hm-label">
+                  <i class="ti ti-hand-finger" aria-hidden="true"></i> Left
+                </div>
+                <div class="hm-num" id="leftCount">—</div>
+              </div>
+              <div class="hand-mini">
+                <div class="hm-label">
+                  <i class="ti ti-hand-finger" aria-hidden="true"></i> Right
+                </div>
+                <div class="hm-num" id="rightCount">—</div>
+              </div>
+            </div>
+
+            <div class="finger-bars">
+              <div class="fb-title">Finger state</div>
+              <div id="fingerBars"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="s-label">
+              <i class="ti ti-hand-stop" aria-hidden="true"></i> Hands detected
+            </div>
+            <div class="s-val" id="handsDetected">0</div>
+          </div>
+          <div class="stat-card">
+            <div class="s-label">
+              <i class="ti ti-clock" aria-hidden="true"></i> FPS
+            </div>
+            <div class="s-val" id="fpsVal">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="s-label">
+              <i class="ti ti-activity" aria-hidden="true"></i> Peak count
+            </div>
+            <div class="s-val" id="peakVal">0</div>
+          </div>
+        </div>
+
+        <div class="history-strip">
+          <div class="hs-title">Last 20 readings</div>
+          <div class="hs-bars" id="histBars"></div>
+        </div>
+
+        <div class="ctrl-row">
+          <button id="toggleBtn" class="primary" onclick="toggleCamera()">
+            <i class="ti ti-player-pause" aria-hidden="true"></i> Pause
+          </button>
+          <button onclick="resetStats()">
+            <i class="ti ti-refresh" aria-hidden="true"></i> Reset stats
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
+
+    <script>
+      const FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"];
+      const FINGER_TIPS = [4, 8, 12, 16, 20];
+      const FINGER_PIPS = [3, 6, 10, 14, 18];
+      const HIST_LEN = 20;
+
+      let handsModel, cameraObj, videoEl, canvasEl, ctx;
+      let running = true,
+        peak = 0,
+        history = [],
+        frameCount = 0,
+        lastFpsTime = Date.now();
+
+      const words = [
+        "Zero",
+        "One",
+        "Two",
+        "Three",
+        "Four",
+        "Five",
+        "Six",
+        "Seven",
+        "Eight",
+        "Nine",
+        "Ten",
+      ];
+
+      function initBars() {
+        const c = document.getElementById("fingerBars");
+        c.innerHTML = "";
+        FINGER_NAMES.forEach((n) => {
+          c.innerHTML += `<div class="fb-row">
+      <div class="fb-name">${n}</div>
+      <div class="fb-track"><div class="fb-fill" id="fill_${n}"></div></div>
+      <div class="fb-dot" id="dot_${n}"></div>
+    </div>`;
+        });
+      }
+
+      function initHistBars() {
+        const c = document.getElementById("histBars");
+        c.innerHTML = "";
+        for (let i = 0; i < HIST_LEN; i++) {
+          c.innerHTML += `<div class="hs-bar-wrap"><div class="hs-bar" id="hb${i}" style="height:3px"></div><div class="hs-num" id="hn${i}">—</div></div>`;
+        }
+      }
+
+      function countFingers(lms, handedness) {
+        const ext = [false, false, false, false, false];
+        for (let i = 1; i < 5; i++) {
+          ext[i] = lms[FINGER_TIPS[i]].y < lms[FINGER_PIPS[i]].y;
+        }
+        const isRight = handedness === "Right";
+        const thumbTip = lms[FINGER_TIPS[0]];
+        const thumbMcp = lms[FINGER_PIPS[0]];
+        ext[0] = isRight ? thumbTip.x < thumbMcp.x : thumbTip.x > thumbMcp.x;
+        return ext;
+      }
+
+      function updateUI(results) {
+        frameCount++;
+        const now = Date.now();
+        if (now - lastFpsTime >= 1000) {
+          document.getElementById("fpsVal").textContent = frameCount;
+          frameCount = 0;
+          lastFpsTime = now;
+        }
+
+        canvasEl.width = videoEl.videoWidth || 640;
+        canvasEl.height = videoEl.videoHeight || 480;
+        ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.translate(-canvasEl.width, 0);
+
+        let totalFingers = 0,
+          leftC = null,
+          rightC = null;
+        const allExt = [false, false, false, false, false];
+
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0
+        ) {
+          results.multiHandLandmarks.forEach((lms, i) => {
+            const label = results.multiHandedness[i].label;
+            const ext = countFingers(lms, label);
+            const count = ext.filter(Boolean).length;
+            totalFingers += count;
+            if (label === "Left") leftC = count;
+            else rightC = count;
+            ext.forEach((v, j) => {
+              if (v) allExt[j] = true;
+            });
+
+            drawConnectors(ctx, lms, HAND_CONNECTIONS, {
+              color: "#5DCAA5",
+              lineWidth: 2,
+            });
+            drawLandmarks(ctx, lms, {
+              color: "#ffffff",
+              fillColor: "#1D9E75",
+              lineWidth: 1.5,
+              radius: 4,
+            });
+
+            lms.forEach((pt, idx) => {
+              if (FINGER_TIPS.includes(idx)) {
+                const fi = FINGER_TIPS.indexOf(idx);
+                if (ext[fi]) {
+                  ctx.beginPath();
+                  ctx.arc(
+                    pt.x * canvasEl.width,
+                    pt.y * canvasEl.height,
+                    11,
+                    0,
+                    2 * Math.PI,
+                  );
+                  ctx.fillStyle = "rgba(29,158,117,0.35)";
+                  ctx.fill();
+                }
+              }
+            });
+          });
+        }
+
+        ctx.restore();
+
+        if (
+          results.multiHandLandmarks &&
+          results.multiHandLandmarks.length > 0
+        ) {
+          const numEl = document.getElementById("countNum");
+          const oldCount = parseInt(numEl.textContent) || 0;
+          if (totalFingers !== oldCount) {
+            numEl.classList.remove("pop");
+            void numEl.offsetWidth;
+            numEl.classList.add("pop");
+            setTimeout(() => numEl.classList.remove("pop"), 180);
+          }
+          numEl.textContent = totalFingers;
+          document.getElementById("fingerWord").textContent =
+            words[totalFingers] || totalFingers;
+          document.getElementById("handsDetected").textContent =
+            results.multiHandLandmarks.length;
+          document.getElementById("leftCount").textContent =
+            leftC !== null ? leftC : "—";
+          document.getElementById("rightCount").textContent =
+            rightC !== null ? rightC : "—";
+
+          if (totalFingers > peak) {
+            peak = totalFingers;
+            document.getElementById("peakVal").textContent = peak;
+          }
+
+          FINGER_NAMES.forEach((n, i) => {
+            const f = document.getElementById("fill_" + n);
+            const d = document.getElementById("dot_" + n);
+            if (allExt[i]) {
+              f.className = "fb-fill on";
+              d.className = "fb-dot on";
+            } else {
+              f.className = "fb-fill off";
+              d.className = "fb-dot";
+            }
+          });
+
+          history.push(totalFingers);
+          if (history.length > HIST_LEN) history.shift();
+          renderHistory();
+        } else {
+          document.getElementById("handsDetected").textContent = 0;
+          document.getElementById("countNum").textContent = 0;
+          document.getElementById("fingerWord").textContent = "—";
+          document.getElementById("leftCount").textContent = "—";
+          document.getElementById("rightCount").textContent = "—";
+          FINGER_NAMES.forEach((n) => {
+            document.getElementById("fill_" + n).className = "fb-fill off";
+            document.getElementById("dot_" + n).className = "fb-dot";
+          });
+        }
+      }
+
+      function renderHistory() {
+        // Right-align history so the newest reading is always the rightmost bar.
+        const pad = HIST_LEN - history.length;
+        for (let i = 0; i < HIST_LEN; i++) {
+          const bar = document.getElementById("hb" + i);
+          const num = document.getElementById("hn" + i);
+          const idx = i - pad;
+          if (idx >= 0 && idx < history.length) {
+            const v = history[idx];
+            bar.style.height = Math.max(4, (v / 10) * 44) + "px";
+            bar.style.background =
+              v > 0 ? "#5DCAA5" : "var(--color-border-tertiary)";
+            num.textContent = v;
+          } else {
+            bar.style.height = "3px";
+            bar.style.background = "var(--color-border-tertiary)";
+            num.textContent = "—";
+          }
+        }
+      }
+
+      function setStatus(type, text) {
+        const b = document.getElementById("statusBadge");
+        const t = document.getElementById("statusText");
+        b.className = "status-badge " + (type || "");
+        t.textContent = text;
+      }
+
+      async function startCamera() {
+        document.getElementById("noCam").style.display = "none";
+        document.getElementById("loadingOverlay").style.display = "flex";
+        document.getElementById("loadText").textContent = "Loading hand model…";
+        setStatus("", "Initialising…");
+
+        videoEl = document.getElementById("videoEl");
+        canvasEl = document.getElementById("overlayCanvas");
+        ctx = canvasEl.getContext("2d");
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "user",
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+            },
+          });
+          videoEl.srcObject = stream;
+          await videoEl.play();
+        } catch (e) {
+          document.getElementById("loadingOverlay").style.display = "none";
+          document.getElementById("noCam").style.display = "flex";
+          setStatus("error", "Camera denied");
+          return;
+        }
+
+        document.getElementById("loadText").textContent = "Loading AI model…";
+
+        handsModel = new Hands({
+          locateFile: (f) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`,
+        });
+        handsModel.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.7,
+          minTrackingConfidence: 0.6,
+        });
+        handsModel.onResults(updateUI);
+
+        cameraObj = new Camera(videoEl, {
+          onFrame: async () => {
+            if (running) await handsModel.send({ image: videoEl });
+          },
+          width: 640,
+          height: 480,
+        });
+
+        cameraObj
+          .start()
+          .then(() => {
+            document.getElementById("loadingOverlay").style.display = "none";
+            setStatus("active", "Live");
+          })
+          .catch(() => {
+            document.getElementById("loadingOverlay").style.display = "none";
+            setStatus("error", "Model failed");
+          });
+      }
+
+      function toggleCamera() {
+        running = !running;
+        const btn = document.getElementById("toggleBtn");
+        if (running) {
+          btn.innerHTML =
+            '<i class="ti ti-player-pause" aria-hidden="true"></i> Pause';
+          setStatus("active", "Live");
+        } else {
+          btn.innerHTML =
+            '<i class="ti ti-player-play" aria-hidden="true"></i> Resume';
+          setStatus("", "Paused");
+        }
+      }
+
+      function resetStats() {
+        peak = 0;
+        history = [];
+        document.getElementById("peakVal").textContent = "0";
+        renderHistory();
+      }
+
+      initBars();
+      initHistBars();
+      startCamera();
+    </script>
+  </body>
+</html>
