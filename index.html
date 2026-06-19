@@ -115,6 +115,42 @@
         flex-shrink: 0;
       }
 
+      .voice-unlock-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: var(--border-radius-md);
+        background: #fff7e0;
+        border: 0.5px solid #f0d98c;
+        color: #7a5c00;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s ease, opacity 0.2s ease;
+      }
+      .voice-unlock-banner:hover {
+        background: #fdedc0;
+      }
+      .voice-unlock-banner.hidden {
+        display: none;
+      }
+      .voice-warning {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: var(--border-radius-md);
+        background: #fcebeb;
+        border: 0.5px solid #f7c1c1;
+        color: #a32d2d;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .voice-warning.visible {
+        display: flex;
+      }
+
       /* ===== Main grid ===== */
       .main-grid {
         display: grid;
@@ -200,12 +236,44 @@
         gap: 6px;
         text-align: center;
       }
+      .count-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        position: relative;
+      }
       .count-label {
         font-size: 12px;
         font-weight: 500;
         color: var(--color-text-secondary);
         letter-spacing: 0.04em;
         text-transform: uppercase;
+      }
+      .speak-indicator {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        color: var(--color-text-tertiary);
+        font-size: 12px;
+        transition: color 0.15s ease, background 0.15s ease;
+      }
+      .speak-indicator.speaking {
+        color: #1d9e75;
+        background: #eaf3de;
+        animation: speak-pulse 0.6s ease-in-out infinite;
+      }
+      @keyframes speak-pulse {
+        0%, 100% { transform: translateY(-50%) scale(1); }
+        50% { transform: translateY(-50%) scale(1.18); }
       }
       .count-num {
         font-size: 72px;
@@ -387,6 +455,17 @@
       .ctrl-row button.primary:hover {
         background: #0f6e56;
       }
+      .ctrl-row button.muted {
+        color: var(--color-text-tertiary);
+      }
+      .ctrl-row button.icon-toggle {
+        flex: 0 0 auto;
+        width: 40px;
+        padding: 0;
+      }
+      .ctrl-row button.icon-toggle i {
+        font-size: 18px;
+      }
 
       /* ===== History strip ===== */
       .history-strip {
@@ -493,6 +572,15 @@
           </div>
         </div>
 
+        <div class="voice-unlock-banner" id="voiceUnlockBanner" onclick="unlockVoice()">
+          <i class="ti ti-volume" aria-hidden="true"></i>
+          <span>Tap here once to enable voice output (your browser requires this)</span>
+        </div>
+        <div class="voice-warning" id="voiceWarning">
+          <i class="ti ti-alert-triangle" aria-hidden="true"></i>
+          <span id="voiceWarningText">Voice output isn't available in this browser.</span>
+        </div>
+
         <div class="main-grid">
           <div class="video-card" id="videoCard">
             <div class="loading-overlay" id="loadingOverlay">
@@ -510,7 +598,12 @@
 
           <div class="side-col">
             <div class="count-card">
-              <div class="count-label">Total fingers</div>
+              <div class="count-label-row">
+                <div class="count-label">Total fingers</div>
+                <div class="speak-indicator" id="speakIndicator">
+                  <i class="ti ti-volume" aria-hidden="true"></i>
+                </div>
+              </div>
               <div class="count-num" id="countNum">0</div>
               <div class="finger-name" id="fingerWord">—</div>
             </div>
@@ -567,6 +660,16 @@
           <button id="toggleBtn" class="primary" onclick="toggleCamera()">
             <i class="ti ti-player-pause" aria-hidden="true"></i> Pause
           </button>
+          <button
+            id="voiceBtn"
+            class="icon-toggle"
+            onclick="toggleVoice()"
+            title="Mute / unmute voice"
+            aria-label="Mute or unmute voice"
+            aria-pressed="true"
+          >
+            <i class="ti ti-volume" id="voiceBtnIcon" aria-hidden="true"></i>
+          </button>
           <button onclick="resetStats()">
             <i class="ti ti-refresh" aria-hidden="true"></i> Reset stats
           </button>
@@ -591,6 +694,154 @@
         frameCount = 0,
         lastFpsTime = Date.now();
 
+      // ===== Voice output state =====
+      let voiceOn = true;
+      let voiceUnlocked = false;
+      let lastSpokenCount = null;
+      let lastFrameCount = null; // tracks frame-to-frame change, independent of when speech actually fires
+      let speechStableTimer = null;
+      let noHandFrameCount = 0;
+      const NO_HAND_RESET_FRAMES = 8; // absorb brief detection flicker before treating the hand as gone
+      const SPEECH_STABLE_MS = 600; // wait for the count to hold steady before speaking
+      const synth = window.speechSynthesis;
+
+      // Chrome (especially on Windows) silently freezes the speech queue
+      // after ~15s of inactivity, and can leave it in a stuck "speaking"
+      // state after cancel(). Nudging resume() periodically prevents this.
+      setInterval(() => {
+        if (synth.paused) synth.resume();
+      }, 5000);
+
+      function showVoiceWarning(text) {
+        const w = document.getElementById("voiceWarning");
+        const t = document.getElementById("voiceWarningText");
+        if (t) t.textContent = text;
+        if (w) w.classList.add("visible");
+      }
+
+      function hideVoiceWarning() {
+        const w = document.getElementById("voiceWarning");
+        if (w) w.classList.remove("visible");
+      }
+
+      // ===== Unified speech engine =====
+      // Every speaker in the app (unlock confirmation, test voice, finger
+      // count) goes through this single pipeline. Nothing else is allowed
+      // to touch synth.speak()/synth.cancel() directly — that's what kept
+      // causing silent races between competing callers.
+      let speechBusy = false;
+      let pendingSpeech = null; // { phrase, callbacks } — the next thing to say
+
+      function runSpeech(phrase, callbacks = {}) {
+        speechBusy = true;
+        const utter = new SpeechSynthesisUtterance(phrase);
+        utter.rate = callbacks.rate || 1.05;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+
+        const indicator = document.getElementById("speakIndicator");
+        utter.onstart = () => {
+          indicator && indicator.classList.add("speaking");
+          hideVoiceWarning();
+          if (callbacks.onstart) callbacks.onstart();
+        };
+        const finish = () => {
+          indicator && indicator.classList.remove("speaking");
+          speechBusy = false;
+          if (pendingSpeech !== null) {
+            const next = pendingSpeech;
+            pendingSpeech = null;
+            runSpeech(next.phrase, next.callbacks);
+          }
+        };
+        utter.onend = finish;
+        utter.onerror = (e) => {
+          if (e && e.error !== "interrupted" && e.error !== "canceled") {
+            showVoiceWarning("Voice output hit an error: " + (e.error || "unknown"));
+          }
+          if (callbacks.onerror) callbacks.onerror(e);
+          finish();
+        };
+
+        synth.speak(utter);
+
+        // Safety net: if Chrome's stuck-queue bug eats onstart/onend
+        // entirely, force-unstick instead of staying silent forever.
+        setTimeout(() => {
+          if (speechBusy && !synth.speaking) finish();
+        }, 4000);
+      }
+
+      // Queue-respecting: used for count announcements. Never cancels
+      // anything currently playing — just remembers the latest phrase and
+      // lets it play as soon as the current one ends.
+      function say(phrase, callbacks = {}) {
+        if (!synth) return;
+        if (speechBusy || synth.speaking || synth.pending) {
+          pendingSpeech = { phrase, callbacks };
+          return;
+        }
+        runSpeech(phrase, callbacks);
+      }
+
+      // Priority: used for direct user actions (unlock banner, test voice
+      // button) that should interrupt whatever's playing. Cancels first,
+      // then lets the resulting onerror->finish() callback start the new
+      // phrase asynchronously — never speak() in the same tick as cancel().
+      function sayPriority(phrase, callbacks = {}) {
+        if (!synth) return;
+        pendingSpeech = { phrase, callbacks };
+        if (speechBusy || synth.speaking || synth.pending) {
+          synth.cancel();
+        } else {
+          const next = pendingSpeech;
+          pendingSpeech = null;
+          runSpeech(next.phrase, next.callbacks);
+        }
+      }
+
+      function unlockVoice() {
+        const banner = document.getElementById("voiceUnlockBanner");
+        if (!synth) {
+          showVoiceWarning(
+            "This browser does not support voice output. Try Chrome or Edge.",
+          );
+          if (banner) banner.classList.add("hidden");
+          return;
+        }
+
+        voiceUnlocked = true; // assume unlocked immediately; the tap itself satisfies the browser
+        if (banner) banner.classList.add("hidden");
+
+        let confirmed = false;
+        sayPriority("Voice output is on.", {
+          onstart: () => {
+            confirmed = true;
+          },
+          onerror: (e) => {
+            showVoiceWarning(
+              "Voice failed to start (" + (e.error || "unknown") + "). Check your system volume and output device.",
+            );
+          },
+        });
+
+        // If nothing happens within 2.5s, the browser likely has no voices loaded at all.
+        setTimeout(() => {
+          if (!confirmed) {
+            const voices = synth.getVoices();
+            if (!voices || voices.length === 0) {
+              showVoiceWarning(
+                "No voices found on this system. Check Windows Settings → Time & Language → Speech, and make sure a voice package is installed.",
+              );
+            } else {
+              showVoiceWarning(
+                "Voice should be working but no sound was heard — check your laptop volume, mute switch, and that the correct output device is selected.",
+              );
+            }
+          }
+        }, 2500);
+      }
+
       const words = [
         "Zero",
         "One",
@@ -604,6 +855,59 @@
         "Nine",
         "Ten",
       ];
+
+      function speakCount(count, leftC, rightC) {
+        if (!voiceOn || !synth) return;
+
+        if (!voiceUnlocked) {
+          // Browser hasn't granted speech permission yet — remind the user instead of failing silently.
+          const banner = document.getElementById("voiceUnlockBanner");
+          if (banner) banner.classList.remove("hidden");
+          return;
+        }
+
+        // Always speaks exactly the number currently shown on the
+        // camera overlay (countNum / leftCount / rightCount) — count,
+        // leftC, rightC are passed straight from the same totalFingers
+        // calculation that drives the on-screen display, so voice and
+        // video can never drift apart.
+        let phrase;
+        if (leftC !== null && rightC !== null) {
+          phrase = `${words[count] || count} fingers. ${words[leftC] || leftC} on the left hand, ${words[rightC] || rightC} on the right.`;
+        } else {
+          phrase = `${words[count] || count} ${count === 1 ? "finger" : "fingers"}`;
+        }
+
+        say(phrase);
+      }
+
+      function toggleVoice() {
+        // First tap on this button also satisfies the browser's
+        // user-gesture requirement for audio, same as the banner did.
+        if (!voiceUnlocked) {
+          unlockVoice();
+          return;
+        }
+
+        voiceOn = !voiceOn;
+        const btn = document.getElementById("voiceBtn");
+        const icon = document.getElementById("voiceBtnIcon");
+        if (voiceOn) {
+          icon.className = "ti ti-volume";
+          btn.classList.remove("muted");
+          btn.setAttribute("aria-pressed", "true");
+          btn.title = "Mute voice";
+        } else {
+          icon.className = "ti ti-volume-3";
+          btn.classList.add("muted");
+          btn.setAttribute("aria-pressed", "false");
+          btn.title = "Unmute voice";
+          if (synth) synth.cancel();
+          pendingSpeech = null;
+          const indicator = document.getElementById("speakIndicator");
+          if (indicator) indicator.classList.remove("speaking");
+        }
+      }
 
       function initBars() {
         const c = document.getElementById("fingerBars");
@@ -734,6 +1038,30 @@
             document.getElementById("peakVal").textContent = peak;
           }
 
+          noHandFrameCount = 0; // a hand is visible this frame — cancel any pending "hand gone" reset
+
+          // Speak the count, but only after it holds steady for a moment —
+          // avoids a rapid-fire voice spamming every single frame.
+          // IMPORTANT: only restart the timer when the count actually
+          // changes from the *previous frame*, not just whenever it
+          // differs from lastSpokenCount — otherwise, since frames arrive
+          // every ~33ms (far faster than the 600ms stability window), the
+          // timer gets cleared and restarted every frame and can never
+          // survive long enough to fire. That was the real bug.
+          if (totalFingers !== lastFrameCount) {
+            lastFrameCount = totalFingers;
+            clearTimeout(speechStableTimer);
+            const capturedCount = totalFingers;
+            const capturedLeft = leftC;
+            const capturedRight = rightC;
+            speechStableTimer = setTimeout(() => {
+              if (capturedCount !== lastSpokenCount) {
+                speakCount(capturedCount, capturedLeft, capturedRight);
+                lastSpokenCount = capturedCount;
+              }
+            }, SPEECH_STABLE_MS);
+          }
+
           FINGER_NAMES.forEach((n, i) => {
             const f = document.getElementById("fill_" + n);
             const d = document.getElementById("dot_" + n);
@@ -759,6 +1087,12 @@
             document.getElementById("fill_" + n).className = "fb-fill off";
             document.getElementById("dot_" + n).className = "fb-dot";
           });
+          noHandFrameCount++;
+          if (noHandFrameCount >= NO_HAND_RESET_FRAMES) {
+            clearTimeout(speechStableTimer);
+            lastSpokenCount = null;
+            lastFrameCount = null;
+          }
         }
       }
 
@@ -862,6 +1196,11 @@
           btn.innerHTML =
             '<i class="ti ti-player-play" aria-hidden="true"></i> Resume';
           setStatus("", "Paused");
+          clearTimeout(speechStableTimer);
+          if (synth) synth.cancel();
+          pendingSpeech = null;
+          const indicator = document.getElementById("speakIndicator");
+          if (indicator) indicator.classList.remove("speaking");
         }
       }
 
